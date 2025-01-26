@@ -2,133 +2,175 @@
 ###############################################################################
 # Script: setup_server.sh
 # Description: Sets up a Linux server with:
-#   1) System updates + basic dev tools (tmux, zsh, git, etc.)
-#   2) Miniconda (or swap out for Miniforge if preferred)
-#   3) Oh My Zsh and Powerlevel10k
+#   1) System updates + dev tools (tmux, zsh, git, etc.)
+#   2) Miniconda
+#   3) Oh My Zsh + Powerlevel10k
 #   4) SSH key generation + GitHub config
+#   5) Copies user config files (dotfiles) from a local "dots" folder
 #
 # Usage:
 #   chmod +x setup_server.sh
 #   sudo bash setup_server.sh
+#
 ###############################################################################
+set -e  # Exit on error
 
-set -e  # Exit on any error
-
-# ------------------------------------------------------------------------------
-# 0) Check for root privileges (optional, remove if you don’t need it)
-# ------------------------------------------------------------------------------
+###############################################################################
+# 0) Check for root privileges (remove or modify if not needed)
+###############################################################################
 if [ "$EUID" -ne 0 ]; then
     echo "Please run as root (e.g., sudo bash setup_server.sh)."
     exit 1
 fi
 
-# ------------------------------------------------------------------------------
-# Variables you should customize:
-# ------------------------------------------------------------------------------
-USERNAME="arjun"        # or a non-root user like "ubuntu"
-USERHOME="/home/arjun"       # or "/home/ubuntu" if USERNAME=ubuntu
+###############################################################################
+# 1) Variables to Customize
+###############################################################################
+USERNAME="arjun"
+USERHOME="/home/arjun"
 CONDA_INSTALL_PATH="/opt/miniconda"
 SSH_KEYNAME="ki_github_ed25519"
 SSH_EMAIL="arjun@kashmirintelligence.com"
 
-# ------------------------------------------------------------------------------
-# 1) Update System & Install Basic Packages
-# ------------------------------------------------------------------------------
-echo "==> [1/6] Updating system and installing packages..."
+# Path to the local "dots" folder with config files
+# We'll assume it's in the same directory as this script.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DOTS_DIR="${SCRIPT_DIR}/dots"
+
+# A list of potential dotfiles you want to copy from `dots` to the user’s home.
+# Add or remove filenames from this array as you see fit.
+DOTFILES=(
+  ".zshrc"
+  ".p10k.zsh"
+  ".tmux.conf"
+  ".gitconfig"
+)
+
+###############################################################################
+# Helper Function: backup_if_exists
+###############################################################################
+backup_if_exists() {
+    local file_path="$1"
+    if [ -e "$file_path" ]; then
+        local timestamp="$(date +%Y%m%d%H%M%S)"
+        echo "Backing up existing $file_path -> $file_path.bak.$timestamp"
+        mv "$file_path" "$file_path.bak.$timestamp"
+    fi
+}
+
+###############################################################################
+# 2) System Update & Package Installation
+###############################################################################
+echo "==> [1/7] Updating system and installing packages..."
 if command -v apt >/dev/null 2>&1; then
     # Ubuntu/Debian
     apt update -y
-    # apt upgrade -y
+    # apt upgrade -y    # Optionally uncomment if you want to upgrade everything
     apt install -y curl wget git tmux zsh
-# elif command -v yum >/dev/null 2>&1; then
-#     # CentOS/Fedora
-#     yum check-update -y
-#     yum install -y curl wget git tmux zsh
-# elif command -v dnf >/dev/null 2>&1; then
-#     # Fedora newer versions
-#     dnf check-update -y
-#     dnf install -y curl wget git tmux zsh
+elif command -v yum >/dev/null 2>&1; then
+    # CentOS/older Fedora
+    yum check-update -y
+    yum install -y curl wget git tmux zsh
+elif command -v dnf >/dev/null 2>&1; then
+    # Fedora newer versions
+    dnf check-update -y
+    dnf install -y curl wget git tmux zsh
 else
     echo "Package manager not recognized. Please modify the script for your distro."
     exit 1
 fi
 
-# ------------------------------------------------------------------------------
-# 2) Install Miniconda (or Miniforge)
-# ------------------------------------------------------------------------------
-# You can swap the URL below for Miniforge if you prefer:
-#   https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+###############################################################################
+# 3) Install Miniconda (system-wide)
+###############################################################################
+if [ ! -d "${CONDA_INSTALL_PATH}" ]; then
+    echo "==> [2/7] Installing Miniconda to ${CONDA_INSTALL_PATH}..."
+    CONDA_INSTALLER="Miniconda3-latest-Linux-x86_64.sh"
+    wget --quiet "https://repo.anaconda.com/miniconda/${CONDA_INSTALLER}" -O "/tmp/${CONDA_INSTALLER}"
+    chmod +x "/tmp/${CONDA_INSTALLER}"
+    /tmp/${CONDA_INSTALLER} -b -f -p "${CONDA_INSTALL_PATH}"
+    rm "/tmp/${CONDA_INSTALLER}"
 
-CONDA_INSTALLER="Miniconda3-latest-Linux-x86_64.sh"
-echo "==> [2/6] Downloading Miniconda installer..."
-wget --quiet "https://repo.anaconda.com/miniconda/${CONDA_INSTALLER}" -O "/tmp/${CONDA_INSTALLER}"
-chmod +x "/tmp/${CONDA_INSTALLER}"
-
-echo "==> Installing Miniconda to $CONDA_INSTALL_PATH..."
-/tmp/${CONDA_INSTALLER} -b -f -p "${CONDA_INSTALL_PATH}"
-rm "/tmp/${CONDA_INSTALLER}"
-
-echo "==> Configuring system-wide conda initialization..."
-cat <<EOF > /etc/profile.d/conda.sh
+    # Create a system-wide conda init script
+    echo "==> Configuring conda initialization..."
+    cat <<EOF > /etc/profile.d/conda.sh
 # >>> conda initialize >>>
 . ${CONDA_INSTALL_PATH}/etc/profile.d/conda.sh
 # <<< conda initialize <<<
 EOF
-
-# ------------------------------------------------------------------------------
-# 3) Install & Configure Oh My Zsh (Unattended)
-# ------------------------------------------------------------------------------
-echo "==> [3/6] Installing Oh My Zsh (unattended) for user ${USERNAME}..."
-sudo -u "${USERNAME}" sh -c "
-  export RUNZSH=no;
-  export CHSH=no;
-  sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)\"
-"
-
-# ------------------------------------------------------------------------------
-# 4) Install and Set Powerlevel10k
-# ------------------------------------------------------------------------------
-echo "==> [4/6] Installing Powerlevel10k..."
-sudo -u "${USERNAME}" git clone --depth=1 \
-    https://github.com/romkatv/powerlevel10k.git \
-    "${USERHOME}/.oh-my-zsh/custom/themes/powerlevel10k" || true
-
-ZSHRC="${USERHOME}/.zshrc"
-if [ -f "$ZSHRC" ]; then
-    # Replace existing ZSH_THEME with powerlevel10k
-    sudo -u "${USERNAME}" sed -i \
-        's|^ZSH_THEME=.*|ZSH_THEME="powerlevel10k/powerlevel10k"|' \
-        "$ZSHRC"
 else
-    # If .zshrc doesn't exist for some reason, create it
-    touch "$ZSHRC"
-    chown "${USERNAME}:${USERNAME}" "$ZSHRC"
-    echo 'ZSH_THEME="powerlevel10k/powerlevel10k"' >> "$ZSHRC"
+    echo "==> [2/7] Miniconda already installed at ${CONDA_INSTALL_PATH}. Skipping."
 fi
 
-# Append recommended p10k config snippet
-cat <<'EOP' >> "$ZSHRC"
+###############################################################################
+# 4) Install Oh My Zsh (Unattended) + Powerlevel10k
+###############################################################################
+echo "==> [3/7] Installing (or updating) Oh My Zsh..."
+if [ ! -d "${USERHOME}/.oh-my-zsh" ]; then
+    sudo -u "${USERNAME}" sh -c "
+      export RUNZSH=no;
+      export CHSH=no;
+      sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)\"
+    "
+else
+    echo "Oh My Zsh already installed for ${USERNAME}. Skipping re-install."
+fi
 
-# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
-EOP
+echo "==> [4/7] Installing (or updating) Powerlevel10k..."
+THEME_DIR="${USERHOME}/.oh-my-zsh/custom/themes/powerlevel10k"
+if [ ! -d "$THEME_DIR" ]; then
+    sudo -u "${USERNAME}" git clone --depth=1 \
+        https://github.com/romkatv/powerlevel10k.git \
+        "$THEME_DIR"
+else
+    echo "Powerlevel10k theme directory exists. Pulling latest changes..."
+    sudo -u "${USERNAME}" git -C "$THEME_DIR" pull || true
+fi
 
-# ------------------------------------------------------------------------------
-# 5) Change Default Shell to Zsh
-# ------------------------------------------------------------------------------
-echo "==> [5/6] Setting default shell to zsh for ${USERNAME}..."
-chsh -s "$(command -v zsh)" "${USERNAME}"
+###############################################################################
+# 5) Copy Dotfiles from local "dots" folder to user's home
+###############################################################################
+echo "==> [5/7] Copying dotfiles (if found in ${DOTS_DIR})..."
 
-# ------------------------------------------------------------------------------
-# 6) Generate SSH Key for GitHub + SSH Config
-# ------------------------------------------------------------------------------
-echo "==> [6/6] Setting up GitHub SSH key..."
+for dotfile in "${DOTFILES[@]}"; do
+    SRC_FILE="${DOTS_DIR}/${dotfile}"
+    DST_FILE="${USERHOME}/${dotfile}"
+
+    if [ -f "${SRC_FILE}" ]; then
+        echo "Found ${dotfile} in dots folder. Installing..."
+        backup_if_exists "${DST_FILE}"
+        cp -v "${SRC_FILE}" "${DST_FILE}"
+        chown "${USERNAME}:${USERNAME}" "${DST_FILE}"
+    else
+        echo "No ${dotfile} in dots folder. Skipping."
+    fi
+done
+
+# Optional: ensure Powerlevel10k is set in .zshrc if it wasn't overwritten
+# (You can add checks here if you want to forcibly set ZSH_THEME or source .p10k.zsh)
+
+###############################################################################
+# 6) Change Default Shell to Zsh
+###############################################################################
+echo "==> [6/7] Setting default shell to zsh for ${USERNAME}..."
+CURRENT_SHELL="$(getent passwd "${USERNAME}" | cut -d: -f7)"
+if [[ "$CURRENT_SHELL" != *"zsh"* ]]; then
+    chsh -s "$(command -v zsh)" "${USERNAME}"
+    echo "Default shell changed to zsh."
+else
+    echo "Default shell is already zsh. No changes."
+fi
+
+###############################################################################
+# 7) Generate SSH Key for GitHub + SSH Config (Non-Destructive)
+###############################################################################
+echo "==> [7/7] Setting up GitHub SSH key..."
+
 SSH_DIR="${USERHOME}/.ssh"
-sudo -u "${USERNAME}" mkdir -p "${SSH_DIR}"
+mkdir -p "${SSH_DIR}"
 chmod 700 "${SSH_DIR}"
 chown "${USERNAME}:${USERNAME}" "${SSH_DIR}"
 
-# If key doesn't exist, generate it
 if [ ! -f "${SSH_DIR}/${SSH_KEYNAME}" ]; then
     echo "Generating a new SSH key (${SSH_KEYNAME}) with email: ${SSH_EMAIL}"
     sudo -u "${USERNAME}" ssh-keygen \
@@ -138,10 +180,10 @@ if [ ! -f "${SSH_DIR}/${SSH_KEYNAME}" ]; then
         -N "" \
         -q
 else
-    echo "Key ${SSH_KEYNAME} already exists. Skipping generation."
+    echo "SSH key ${SSH_KEYNAME} already exists. Skipping generation."
 fi
 
-# Ensure the .ssh/config has an entry for GitHub
+# Ensure .ssh/config has an entry for GitHub
 SSH_CONFIG="${SSH_DIR}/config"
 if ! grep -q "Host github.com" "${SSH_CONFIG}" 2>/dev/null; then
     echo "Creating SSH config entry for GitHub..."
@@ -154,23 +196,25 @@ Host github.com
 EOF
     chown "${USERNAME}:${USERNAME}" "${SSH_CONFIG}"
     chmod 600 "${SSH_CONFIG}"
+else
+    echo "SSH config entry for GitHub already exists. Skipping."
 fi
 
-# ------------------------------------------------------------------------------
+###############################################################################
 # Final Output
-# ------------------------------------------------------------------------------
+###############################################################################
 echo "============================================================"
 echo " Setup complete!"
-echo " 1) Miniconda installed to:      ${CONDA_INSTALL_PATH}"
+echo " 1) Miniconda installed (if not already) at: ${CONDA_INSTALL_PATH}"
 echo " 2) tmux, zsh, Oh My Zsh + Powerlevel10k installed."
-echo " 3) Conda init script:           /etc/profile.d/conda.sh"
-echo " 4) Generated SSH key for GitHub: ${SSH_DIR}/${SSH_KEYNAME}"
+echo " 3) Copied dotfiles (if they existed in 'dots' folder)."
+echo " 4) Conda init script: /etc/profile.d/conda.sh"
+echo " 5) Generated SSH key (if not already present): ${SSH_DIR}/${SSH_KEYNAME}"
 echo "============================================================"
-
 echo "Next steps:"
-echo "  * Log out and log back in (so zsh is your default shell)."
-echo "  * Run:   source /etc/profile.d/conda.sh   to activate conda if needed."
-echo "  * Copy your public key to GitHub (Settings > SSH and GPG keys)."
-echo "    Public key path: ${SSH_DIR}/${SSH_KEYNAME}.pub"
-echo "    You can test SSH connectivity: sudo -u ${USERNAME} ssh -T git@github.com"
+echo "  * Log out/log back in or 'sudo su - ${USERNAME}' to load new shell."
+echo "  * 'source /etc/profile.d/conda.sh' to activate conda if needed."
+echo "  * Add your public key to GitHub:"
+echo "    ${SSH_DIR}/${SSH_KEYNAME}.pub"
+echo "  * Test SSH: sudo -u ${USERNAME} ssh -T git@github.com"
 echo "============================================================"
