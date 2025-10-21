@@ -27,12 +27,24 @@ case "$OS" in
 esac
 
 ###############################################################################
-# Root privileges check (only needed for Linux)
+# Root privilege handling
 ###############################################################################
-if [ "$PLATFORM" = "linux" ] && [ "$EUID" -ne 0 ]; then
-    echo "Please run as root (e.g., sudo bash setup_server.sh)."
-    exit 1
+if [ "$PLATFORM" = "linux" ]; then
+    # Require root for apt/yum installs
+    if [ "$EUID" -ne 0 ]; then
+        echo "Please run as root (e.g., sudo bash setup_server.sh)."
+        exit 1
+    fi
+else
+    # macOS should NOT be run as root
+    if [ "$EUID" -eq 0 ]; then
+        echo "⚠️  Don't run this script with sudo on macOS."
+        echo "Please re-run as your normal user, e.g.:"
+        echo "   ./setup_server.sh"
+        exit 1
+    fi
 fi
+
 
 ###############################################################################
 # Variables
