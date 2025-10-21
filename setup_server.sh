@@ -158,7 +158,13 @@ done
 # 5) Change shell to zsh
 ###############################################################################
 echo "==> [5/7] Changing default shell to zsh..."
-CURRENT_SHELL="$(dscl . -read /Users/${USERNAME} UserShell 2>/dev/null | awk '{print $2}')"
+if [ "$PLATFORM" = "macos" ]; then
+    CURRENT_SHELL="$(dscl . -read /Users/${USERNAME} UserShell 2>/dev/null | awk '{print $2}')"
+elif [ "$PLATFORM" = "linux" ]; then
+    CURRENT_SHELL="$(getent passwd "${USERNAME}" | cut -d: -f7)"
+else
+    CURRENT_SHELL=""
+fi
 if [[ "$CURRENT_SHELL" != *"zsh"* ]]; then
     chsh -s "$(command -v zsh)" "${USERNAME}" || true
 fi
