@@ -138,7 +138,11 @@ fi
 
 THEME_DIR="${USERHOME}/.oh-my-zsh/custom/themes/powerlevel10k"
 if [ ! -d "$THEME_DIR" ]; then
-    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$THEME_DIR"
+    if [ "$PLATFORM" = "linux" ]; then
+        sudo -u "$USERNAME" git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$THEME_DIR"
+    else
+        git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$THEME_DIR"
+    fi
 else
     git -C "$THEME_DIR" pull || true
 fi
