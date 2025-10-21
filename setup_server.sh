@@ -129,7 +129,11 @@ fi
 ###############################################################################
 echo "==> [3/7] Installing Oh My Zsh and Powerlevel10k..."
 if [ ! -d "${USERHOME}/.oh-my-zsh" ]; then
-    RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+    if [ "$PLATFORM" = "linux" ]; then
+        sudo -u "${USERNAME}" RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+    else
+        RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+    fi
 fi
 
 THEME_DIR="${USERHOME}/.oh-my-zsh/custom/themes/powerlevel10k"
