@@ -182,6 +182,10 @@ chmod 700 "${SSH_DIR}"
 
 if [ ! -f "${SSH_DIR}/${SSH_KEYNAME}" ]; then
     ssh-keygen -t ed25519 -C "${SSH_EMAIL}" -f "${SSH_DIR}/${SSH_KEYNAME}" -N "" -q
+    # Fix ownership if running as root on Linux
+    if [ "$PLATFORM" = "linux" ]; then
+        chown "${USERNAME}:${USERNAME}" "${SSH_DIR}/${SSH_KEYNAME}" "${SSH_DIR}/${SSH_KEYNAME}.pub"
+    fi
 else
     echo "SSH key already exists. Skipping."
 fi
