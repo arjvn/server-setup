@@ -149,6 +149,9 @@ for dotfile in "${DOTFILES[@]}"; do
     if [ -f "${SRC_FILE}" ]; then
         backup_if_exists "${DST_FILE}"
         cp -v "${SRC_FILE}" "${DST_FILE}"
+        if [ "$PLATFORM" = "linux" ]; then
+            chown "${USERNAME}:${USERNAME}" "${DST_FILE}"
+        fi
     else
         echo "No ${dotfile} found. Skipping."
     fi
