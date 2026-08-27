@@ -8,6 +8,7 @@
 #   - Oh My Zsh + Powerlevel10k
 #   - SSH key + GitHub config
 #   - User dotfiles from ./dots/
+#   - macOS only: iTerm2 + Tiles, with settings from ./macos/prefs/
 #
 # Usage:
 #   chmod +x setup_server.sh
@@ -211,6 +212,23 @@ EOF
 fi
 
 ###############################################################################
+# 7) macOS apps and their preferences
+###############################################################################
+echo "==> [7/7] Setting up macOS apps..."
+if [ "$PLATFORM" != "macos" ]; then
+    echo "Not macOS. Skipping."
+elif [ "${SKIP_MACOS_APPS:-0}" = "1" ]; then
+    echo "SKIP_MACOS_APPS=1 set. Skipping."
+elif [ -x "${SCRIPT_DIR}/macos/setup_macos_apps.sh" ]; then
+    # Guarded: restoring iTerm2 prefs needs iTerm2 quit, so this bails out when
+    # run from inside iTerm2 rather than killing the terminal mid-setup.
+    "${SCRIPT_DIR}/macos/setup_macos_apps.sh" || \
+        echo "  -> run it on its own from Terminal.app: ./macos/setup_macos_apps.sh"
+else
+    echo "macos/setup_macos_apps.sh not found. Skipping."
+fi
+
+###############################################################################
 # Summary
 ###############################################################################
 echo "============================================================"
@@ -219,6 +237,9 @@ echo " 1) Miniconda installed at: ${CONDA_INSTALL_PATH}"
 echo " 2) tmux, zsh, Oh My Zsh + Powerlevel10k installed."
 echo " 3) Copied dotfiles from 'dots' folder."
 echo " 4) SSH key generated: ${SSH_DIR}/${SSH_KEYNAME}"
+if [ "$PLATFORM" = "macos" ]; then
+    echo " 5) iTerm2 + Tiles installed and configured from macos/prefs/."
+fi
 echo "============================================================"
 echo "Next steps:"
 echo "  * Restart terminal or run: source ~/.zshrc"
