@@ -131,6 +131,13 @@ alias cparj="scp admin@172.16.1.4:"
 alias k8_carbon="ca metaflow; export METAFLOW_EXECUTION_ENV=kubernetes; export AWS_DEFAULT_REGION=eu-west-1; export METAFLOW_PROFILE=carbon; echo Export your aws MetaflowKubernetes keys!"
 alias k8_batch="ca metaflow; export METAFLOW_EXECUTION_ENV=batch; export AWS_DEFAULT_REGION=eu-west-1; export METAFLOW_PROFILE=batch; echo Export your aws batch keys!"
 alias carbon='ssh aagrawal@172.16.1.15'
+# Guarded: a fresh machine has no rancher, and the completion line errors on
+# every shell start without it.
+if command -v rancher >/dev/null 2>&1; then
+    alias rk="rancher kubectl"
+    source <(rancher kubectl completion zsh)
+    compdef rk='kubectl'
+fi
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
@@ -152,3 +159,4 @@ fi
 unset __conda_setup
 # <<< conda initialize <<<
 
+export PATH="$HOME/.local/bin:$PATH"
